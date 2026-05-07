@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Anime Lover</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <div class="page-wrap">
+    <div class="hero">
+      <div class="hero-bg" id="heroBg" style="background:linear-gradient(135deg,#1a0533,#0a0a1f,#1a1500);"></div>
+      <div class="hero-content">
+        <div class="hero-badge">🔥 Welcome</div>
+        <h1 class="hero-title" id="heroTitle">Team Anime<br>Lover</h1>
+        <p class="hero-desc" id="heroDesc">Your ultimate destination for anime and live action content.</p>
+        <div class="hero-actions" id="heroActions">
+          <a href="browse.html" class="btn btn-primary">▶ Browse All</a>
+        </div>
+      </div>
+    </div>
+
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">Latest <span>Anime</span></h2>
+        <a href="browse.html?type=Anime" class="see-all">See All →</a>
+      </div>
+      <div class="anime-row" id="animeRow">
+        <div style="padding:40px;color:var(--text-muted);display:flex;align-items:center;gap:12px;">
+          <div class="spinner"></div> Loading...
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">Latest <span>Live Action</span></h2>
+        <a href="browse.html?type=Live%20Action" class="see-all">See All →</a>
+      </div>
+      <div class="anime-row" id="liveRow">
+        <div style="padding:40px;color:var(--text-muted);display:flex;align-items:center;gap:12px;">
+          <div class="spinner"></div> Loading...
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="continueSection" style="display:none;">
+      <div class="section-header">
+        <h2 class="section-title">Continue <span>Watching</span></h2>
+        <a href="mylist.html" class="see-all">My List →</a>
+      </div>
+      <div class="anime-row" id="continueRow"></div>
+    </section>
+  </div>
+
+  <script type="module" src="js/db.js"></script>
+  <script src="js/cloudinary.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    window.addEventListener("db-ready", async () => {
+      if (!DB.getSession()) { window.location.href = "login.html"; return; }
+      if (DB.getSession().isAdmin) { window.location.href = "admin.html"; return; }
+      await buildNavbar(document.getElementById("navbarContainer"));
+      await loadHome();
+    });
+
+    async function loadHome() {
+      const animes    = await DB.getAllAnimes();
+      const animeList = animes.filter(a => a.type === "Anime").slice(0, 12);
+      const liveList  = animes.filter(a => a.type === "Live Action").slice(0, 12);
+
+      if (animes.length > 0) {
+        const hero = animes[0];
+        document.getElementById("heroBg").style.backgroundImage = `url('${hero.banner}')`;
+        document.getElementById("heroTitle").textContent = hero.name;
+        document.getElementById("heroDesc").textContent  = (hero.description || "").substring(0, 160);
+        document.getElementById("heroActions").innerHTML = `
+          <a href="anime.html?id=${hero.id}" class="btn btn-primary">▶ Watch Now</a>
+          <button class="btn btn-secondary" onclick="addToList('${hero.id}')">+ My List</button>`;
+      }
+
+      const renderRow = (list, rowId) => {
+        const el = document.getElementById(rowId);
+        el.innerHTML = list.length === 0
+          ? `<div style="padding:40px;color:var(--text-muted);">Nothing uploaded yet.</div>`
+          : list.map(animeCard).join("");
+      };
+      renderRow(animeList, "animeRow");
+      renderRow(liveList,  "liveRow");
+
+      const s    = DB.getSession();
+      const user = await DB.getUserById(s.userId);
+      if (user?.history?.length > 0) {
+        const seen = new Set(); const hist = [];
+        for (const h of user.history) {
+          if (!seen.has(h.animeId)) {
+            seen.add(h.animeId);
+            const a = animes.find(x => x.id === h.animeId);
+            if (a) hist.push(a);
+          }
+          if (hist.length >= 8) break;
+        }
+        if (hist.length > 0) {
+          document.getElementById("continueSection").style.display = "block";
+          document.getElementById("continueRow").innerHTML = hist.map(animeCard).join("");
+        }
+      }
+    }
+
+    function animeCard(a) {
+      const eps = a.episodes || [];
+      return `
+        <div class="anime-card" onclick="window.location.href='anime.html?id=${a.id}'">
+          <img class="anime-card-img" src="${a.banner}" alt="${a.name}" onerror="this.style.background='var(--bg-surface)'">
+          <span class="card-type-badge">${a.type === "Anime" ? "🎌" : "🎬"} ${a.type}</span>
+          <div class="anime-card-body">
+            <div class="anime-card-title">${a.name}</div>
+            <div class="anime-card-meta">
+              <span class="anime-card-status status-${a.status==="Completed"?"completed":a.status==="On-Going"?"ongoing":"dubbing"}">${a.status}</span>
+              <span class="anime-card-eps">${eps.length}/${a.totalEpisodes} ep</span>
+            </div>
+          </div>
+          <div class="anime-card-overlay">
+            <button class="btn btn-primary btn-sm">▶ Watch</button>
+            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();addToList('${a.id}')">+ My List</button>
+          </div>
+        </div>`;
+    }
+
+    async function addToList(animeId) {
+      const s = DB.getSession(); if (!s) return;
+      await DB.addToMyList(s.userId, animeId);
+      toast("Added to My List!", "success");
+    }
+  </script>
+</body>
+</html>
