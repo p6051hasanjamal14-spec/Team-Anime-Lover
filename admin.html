@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — Team Anime Lover</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .admin-wrap  { padding:32px 48px 60px; }
+    .admin-title { font-family:var(--font-heading); font-size:2.5rem; letter-spacing:2px; margin-bottom:8px; }
+    .stats-row   { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:40px; }
+    .stat-card   { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; text-align:center; }
+    .stat-num    { font-family:var(--font-heading); font-size:3rem; color:var(--accent); }
+    .stat-label  { font-family:var(--font-ui); font-weight:600; color:var(--text-muted); font-size:0.85rem; margin-top:4px; }
+    .thumb-sm    { width:50px; height:68px; object-fit:cover; border-radius:6px; }
+    .confirm-wrap { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:3000; display:flex; align-items:center; justify-content:center; }
+    .confirm-box  { background:var(--bg-surface); border:1px solid var(--border); border-radius:16px; padding:32px; max-width:400px; width:90%; text-align:center; }
+    @media(max-width:900px){ .admin-wrap { padding:16px; } }
+  </style>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <div class="page-wrap">
+    <div class="admin-wrap">
+      <h1 class="admin-title">🛠️ Admin <span style="color:var(--accent)">Dashboard</span></h1>
+      <p style="color:var(--text-muted);margin-bottom:32px;">Manage your content library — Team Anime Lover</p>
+
+      <div class="stats-row" id="statsRow">
+        <div class="stat-card"><div class="spinner" style="margin:auto;"></div></div>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:32px;">
+        <a href="admin-upload.html" class="btn btn-primary">+ Upload New</a>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('all',this)">All Content</button>
+        <button class="tab-btn"        onclick="switchTab('Anime',this)">🎌 Anime</button>
+        <button class="tab-btn"        onclick="switchTab('Live Action',this)">🎬 Live Action</button>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="admin-table">
+          <thead><tr><th>Banner</th><th>Name</th><th>Type</th><th>Status</th><th>Episodes</th><th>Actions</th></tr></thead>
+          <tbody id="contentBody">
+            <tr><td colspan="6" style="text-align:center;padding:40px;"><div class="spinner" style="margin:auto;"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="confirm-wrap" id="confirmWrap" style="display:none;">
+    <div class="confirm-box">
+      <h3 style="font-family:var(--font-heading);font-size:1.5rem;margin-bottom:12px;">Delete Anime?</h3>
+      <p style="color:var(--text-muted);margin-bottom:24px;" id="confirmMsg"></p>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <button class="btn btn-secondary" onclick="document.getElementById('confirmWrap').style.display='none'">Cancel</button>
+        <button class="btn btn-danger" id="confirmOk">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/db.js"></script>
+  <script src="js/cloudinary.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    let allAnimes = [], currentFilter = "all";
+
+    window.addEventListener("db-ready", async () => {
+      if (!DB.getSession()) { window.location.href = "login.html"; return; }
+      if (!DB.getSession().isAdmin) { window.location.href = "index.html"; return; }
+      await buildNavbar(document.getElementById("navbarContainer"));
+      allAnimes = await DB.getAllAnimes();
+      renderStats(); renderTable();
+    });
+
+    function switchTab(type, btn) {
+      currentFilter = type;
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active"); renderTable();
+    }
+
+    function renderStats() {
+      document.getElementById("statsRow").innerHTML = `
+        <div class="stat-card"><div class="stat-num">${allAnimes.length}</div><div class="stat-label">Total Content</div></div>
+        <div class="stat-card"><div class="stat-num">${allAnimes.filter(a=>a.type==="Anime").length}</div><div class="stat-label">Anime</div></div>
+        <div class="stat-card"><div class="stat-num">${allAnimes.filter(a=>a.type==="Live Action").length}</div><div class="stat-label">Live Action</div></div>
+        <div class="stat-card"><div class="stat-num">${allAnimes.reduce((s,a)=>s+(a.episodes||[]).length,0)}</div><div class="stat-label">Episodes</div></div>`;
+    }
+
+    function renderTable() {
+      let list = currentFilter === "all" ? allAnimes : allAnimes.filter(a => a.type === currentFilter);
+      const tbody = document.getElementById("contentBody");
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">No content yet. <a href="admin-upload.html" style="color:var(--accent)">Upload now →</a></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = list.map(a => `
+        <tr>
+          <td><img class="thumb-sm" src="${a.banner}" alt="${a.name}" onerror="this.style.background='var(--bg-surface)'"></td>
+          <td style="font-weight:600;max-width:200px;">${a.name}</td>
+          <td><span class="badge ${a.type==="Anime"?"badge-anime":"badge-live"}">${a.type}</span></td>
+          <td><span class="anime-card-status status-${a.status==="Completed"?"completed":a.status==="On-Going"?"ongoing":"dubbing"}">${a.status}</span></td>
+          <td>${(a.episodes||[]).length} / ${a.totalEpisodes}</td>
+          <td>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <a href="admin-upload.html?edit=${a.id}" class="btn btn-secondary btn-sm">✏️ Edit</a>
+              <a href="admin-episodes.html?id=${a.id}" class="btn btn-secondary btn-sm">📺 Episodes</a>
+              <button class="btn btn-danger btn-sm" onclick="confirmDelete('${a.id}','${a.name.replace(/'/g,"\\'")}')">🗑️ Delete</button>
+            </div>
+          </td>
+        </tr>`).join("");
+    }
+
+    function confirmDelete(id, name) {
+      document.getElementById("confirmMsg").textContent = `Delete "${name}" and all its episodes? This cannot be undone.`;
+      document.getElementById("confirmWrap").style.display = "flex";
+      document.getElementById("confirmOk").onclick = async () => {
+        document.getElementById("confirmOk").textContent = "Deleting...";
+        await DB.deleteAnime(id);
+        allAnimes = allAnimes.filter(a => a.id !== id);
+        document.getElementById("confirmWrap").style.display = "none";
+        document.getElementById("confirmOk").textContent = "Delete";
+        renderStats(); renderTable();
+        toast("Deleted!", "success");
+      };
+    }
+  </script>
+</body>
+</html>

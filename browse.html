@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browse — Team Anime Lover</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .browse-header { padding:40px 48px 0; }
+    .browse-title  { font-family:var(--font-heading); font-size:2.5rem; letter-spacing:2px; }
+    .filter-bar    { display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; }
+    .filter-pill   { padding:8px 18px; border-radius:24px; font-family:var(--font-ui); font-weight:600; font-size:0.85rem; cursor:pointer; border:1.5px solid var(--border); color:var(--text-muted); background:none; transition:all 0.2s; }
+    .filter-pill.active { border-color:var(--accent); color:var(--accent); background:rgba(232,180,90,0.1); }
+    .browse-body  { padding:32px 48px 60px; }
+    .result-count { font-size:0.85rem; color:var(--text-muted); margin-bottom:20px; }
+    @media(max-width:900px){ .browse-header,.browse-body { padding-left:16px; padding-right:16px; } }
+  </style>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <div class="page-wrap">
+    <div class="browse-header">
+      <h1 class="browse-title" id="browseTitle">Browse All</h1>
+      <div class="filter-bar">
+        <button class="filter-pill active" data-type="All"          onclick="setFilter('All',this)">All</button>
+        <button class="filter-pill"        data-type="Anime"        onclick="setFilter('Anime',this)">🎌 Anime</button>
+        <button class="filter-pill"        data-type="Live Action"  onclick="setFilter('Live Action',this)">🎬 Live Action</button>
+        <button class="filter-pill"        data-status="Completed"           onclick="setStatus('Completed',this)">Completed</button>
+        <button class="filter-pill"        data-status="On-Going"            onclick="setStatus('On-Going',this)">On-Going</button>
+        <button class="filter-pill"        data-status="Dubbing In Progress" onclick="setStatus('Dubbing In Progress',this)">Dubbing</button>
+      </div>
+    </div>
+    <div class="browse-body">
+      <div class="result-count" id="resultCount"></div>
+      <div class="anime-grid"  id="browseGrid">
+        <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px;color:var(--text-muted);padding:40px;">
+          <div class="spinner"></div> Loading content...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/db.js"></script>
+  <script src="js/cloudinary.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    let allAnimes = [], activeType = "All", activeStatus = "";
+    const params    = new URLSearchParams(window.location.search);
+    const qParam    = params.get("q")    || "";
+    const typeParam = params.get("type") || "";
+
+    window.addEventListener("db-ready", async () => {
+      if (!DB.getSession()) { window.location.href = "login.html"; return; }
+      if (DB.getSession().isAdmin) { window.location.href = "admin.html"; return; }
+      await buildNavbar(document.getElementById("navbarContainer"));
+      if (qParam) {
+        document.getElementById("browseTitle").textContent = `Search: "${qParam}"`;
+        allAnimes = await DB.searchAnimes(qParam);
+      } else {
+        allAnimes = await DB.getAllAnimes();
+        if (typeParam) {
+          activeType = typeParam;
+          document.getElementById("browseTitle").textContent = typeParam;
+          document.querySelector(`[data-type="${typeParam}"]`)?.classList.add("active");
+          document.querySelector('[data-type="All"]')?.classList.remove("active");
+        }
+      }
+      render();
+    });
+
+    function setFilter(type, btn) {
+      activeType = type; activeStatus = "";
+      document.querySelectorAll("[data-type]").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll("[data-status]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active"); render();
+    }
+    function setStatus(status, btn) {
+      if (activeStatus === status) { activeStatus = ""; btn.classList.remove("active"); }
+      else { document.querySelectorAll("[data-status]").forEach(b => b.classList.remove("active")); activeStatus = status; btn.classList.add("active"); }
+      render();
+    }
+
+    function render() {
+      let list = allAnimes;
+      if (activeType !== "All") list = list.filter(a => a.type === activeType);
+      if (activeStatus)         list = list.filter(a => a.status === activeStatus);
+      document.getElementById("resultCount").textContent = `${list.length} result${list.length !== 1 ? "s" : ""}`;
+      const grid = document.getElementById("browseGrid");
+      if (list.length === 0) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+          <div class="empty-icon">🔍</div><h3>Nothing Found</h3><p>Try adjusting your filters.</p></div>`;
+        return;
+      }
+      grid.innerHTML = list.map(a => {
+        const eps = a.episodes || [];
+        return `
+          <div class="anime-card" onclick="window.location.href='anime.html?id=${a.id}'">
+            <img class="anime-card-img" src="${a.banner}" alt="${a.name}" onerror="this.style.background='var(--bg-surface)'">
+            <span class="card-type-badge">${a.type==="Anime"?"🎌":"🎬"} ${a.type}</span>
+            <div class="anime-card-body">
+              <div class="anime-card-title">${a.name}</div>
+              <div class="anime-card-meta">
+                <span class="anime-card-status status-${a.status==="Completed"?"completed":a.status==="On-Going"?"ongoing":"dubbing"}">${a.status}</span>
+                <span class="anime-card-eps">${eps.length}/${a.totalEpisodes} ep</span>
+              </div>
+            </div>
+            <div class="anime-card-overlay">
+              <button class="btn btn-primary btn-sm">▶ Watch</button>
+              <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();addList('${a.id}')">+ My List</button>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    async function addList(animeId) {
+      const s = DB.getSession(); if (!s) return;
+      await DB.addToMyList(s.userId, animeId);
+      toast("Added to My List!", "success");
+    }
+  </script>
+</body>
+</html>

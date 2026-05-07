@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watch — Team Anime Lover</title>
+
+  <!-- Cloudinary Video Player CSS -->
+  <link href="https://unpkg.com/cloudinary-video-player@2.1.0/dist/cld-video-player.min.css" rel="stylesheet">
+
+  <!-- Google Font: Handlee (for player theme) -->
+  <link href="https://fonts.googleapis.com/css2?family=Handlee&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/style.css">
+
+  <style>
+    /* ── Hero ── */
+    .detail-hero { height:420px; position:relative; overflow:hidden; display:flex; align-items:flex-end; padding:0 48px 40px; }
+    .detail-bg   { position:absolute; inset:0; background-size:cover; background-position:center top; filter:brightness(0.35); }
+    .detail-bg::after { content:''; position:absolute; inset:0; background:linear-gradient(to top,var(--bg-dark) 0%,rgba(10,10,15,0) 60%); }
+    .detail-content { position:relative; z-index:1; display:flex; gap:32px; align-items:flex-end; }
+    .detail-poster  { width:140px; height:200px; object-fit:cover; border-radius:12px; border:3px solid var(--accent); flex-shrink:0; }
+    .detail-title   { font-family:var(--font-heading); font-size:2.5rem; letter-spacing:2px; line-height:1; margin-bottom:8px; }
+    .detail-desc    { color:rgba(240,240,248,0.8); font-size:0.9rem; line-height:1.6; max-width:600px; }
+    .detail-actions { display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
+
+    /* ── Body Layout ── */
+    .detail-body { padding:32px 48px 60px; display:grid; grid-template-columns:1fr 300px; gap:32px; }
+
+    /* ── Cloudinary Player Wrapper ── */
+    .cld-player-wrap {
+      width: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #000;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.7);
+      position: relative;
+    }
+    .cld-player-wrap video {
+      width: 100% !important;
+      max-height: 520px;
+    }
+    /* Override Cloudinary player theme colors */
+    .vjs-theme-sea .vjs-control-bar { background: linear-gradient(to top, rgba(10,10,15,0.98), transparent); }
+    .vjs-theme-sea .vjs-play-progress { background: #037EF8 !important; }
+    .vjs-theme-sea .vjs-slider { background: rgba(255,255,255,0.15) !important; }
+    .vjs-theme-sea .vjs-big-play-button {
+      border-color: #037EF8 !important;
+      background: rgba(3,126,248,0.25) !important;
+    }
+    .vjs-theme-sea .vjs-big-play-button:hover { background: rgba(3,126,248,0.55) !important; }
+    .vjs-theme-sea .vjs-big-play-button .vjs-icon-placeholder::before { color: #FDFDFD !important; }
+
+    /* Now Playing Info */
+    .now-playing-bar {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 20px; margin-top: 16px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .now-playing-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #037EF8; flex-shrink: 0;
+      box-shadow: 0 0 10px #037EF8;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:0.5; transform:scale(1.3); } }
+    .now-playing-info { flex:1; min-width:0; }
+    .now-playing-label { font-size:0.7rem; color:#037EF8; font-family:var(--font-ui); font-weight:700; text-transform:uppercase; letter-spacing:1px; }
+    .now-playing-title { font-family:var(--font-ui); font-weight:700; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+    .now-playing-desc  { font-size:0.8rem; color:var(--text-muted); margin-top:2px; }
+
+    /* No Episode Message */
+    #noEpMsg { text-align:center; padding:60px; color:var(--text-muted); }
+
+    /* Episode Sidebar */
+    .ep-sidebar-title { font-family:var(--font-heading); font-size:1.4rem; margin-bottom:16px; }
+
+    @media(max-width:900px){
+      .detail-hero   { padding:0 16px 24px; height:300px; }
+      .detail-poster { width:80px; height:120px; }
+      .detail-title  { font-size:1.6rem; }
+      .detail-body   { grid-template-columns:1fr; padding:16px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <div class="page-wrap">
+
+    <!-- ── Hero Banner ── -->
+    <div class="detail-hero">
+      <div class="detail-bg" id="detailBg"></div>
+      <div class="detail-content">
+        <img class="detail-poster" id="detailPoster" src="" alt="">
+        <div>
+          <div id="detailBadges" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"></div>
+          <h1 class="detail-title" id="detailTitle">Loading...</h1>
+          <p class="detail-desc"   id="detailDesc"></p>
+          <div class="detail-actions" id="detailActions"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Body ── -->
+    <div class="detail-body">
+
+      <!-- LEFT: Player -->
+      <div>
+        <!-- Cloudinary Video Player -->
+        <div id="playerWrap" style="display:none;">
+          <div class="cld-player-wrap">
+            <video
+              id="cldPlayer"
+              class="cld-video-player cld-video-player-skin-dark vjs-theme-sea"
+              controls
+              playsinline
+            ></video>
+          </div>
+
+          <!-- Now Playing Bar -->
+          <div class="now-playing-bar" id="nowPlayingBar">
+            <div class="now-playing-dot"></div>
+            <div class="now-playing-info">
+              <div class="now-playing-label">▶ Now Playing</div>
+              <div class="now-playing-title" id="nowPlayingTitle">—</div>
+              <div class="now-playing-desc"  id="nowPlayingDesc"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- No Episodes Yet -->
+        <div id="noEpMsg">
+          <div style="font-size:3rem;margin-bottom:16px;">📭</div>
+          <p>No episodes uploaded yet. Check back soon!</p>
+        </div>
+      </div>
+
+      <!-- RIGHT: Episodes List -->
+      <div>
+        <h3 class="ep-sidebar-title">Episodes</h3>
+        <div class="episode-list" id="episodeList"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Cloudinary Video Player JS -->
+  <script src="https://unpkg.com/cloudinary-core@latest/cloudinary-core-shrinkwrap.min.js"></script>
+  <script src="https://unpkg.com/cloudinary-video-player@2.1.0/dist/cld-video-player.min.js"></script>
+
+  <!-- Firebase + App Scripts -->
+  <script type="module" src="js/db.js"></script>
+  <script src="js/cloudinary.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/utils.js"></script>
+
+  <script>
+    const params  = new URLSearchParams(window.location.search);
+    const animeId = params.get("id");
+    let anime = null, session = null, cldPlayer = null;
+
+    // ── Init Cloudinary Player ────────────────────────────
+    function initCloudinaryPlayer() {
+      if (cldPlayer) return; // already initialised
+
+      const cl = cloudinary.Cloudinary.new({ cloud_name: "ddjld75el" });
+
+      cldPlayer = cl.videoPlayer("cldPlayer", {
+        // Appearance & Brand
+        fluid         : true,
+        skin          : "dark",
+        colors        : {
+          base   : "#0A0A0A",
+          text   : "#FDFDFD",
+          accent : "#037EF8"
+        },
+        fontFace      : "Handlee",
+
+        // Poster (Death Note EP1 image)
+        posterOptions : {
+          publicId    : "",           // will be set per-episode
+          transformation: { crop: "fill", gravity: "auto" }
+        },
+
+        // Controls
+        controls        : true,
+        volumeControl   : true,
+        seekThumbnails  : true,
+        pictureInPicture: true,
+
+        // Skip buttons (+/- 10 seconds)
+        skipButtons     : {
+          forward : 10,
+          backward: 10
+        },
+
+        // Right-click context menu
+        allowUsageReport: false,
+
+        // Playback
+        autoplay    : false,
+        muted       : false,
+        loop        : false,
+        preload     : "auto",
+
+        // Custom title shown in player
+        showLogo    : false,
+        playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
+
+        // Quality selector
+        qualitySelector: true,
+      });
+
+      // Listen for play event → save history
+      cldPlayer.on("play", () => {
+        const src = cldPlayer.currentSource();
+        // history already saved on playEp()
+      });
+    }
+
+    // ── Extract Cloudinary public_id from URL ─────────────
+    function getPublicIdFromUrl(url) {
+      if (!url) return null;
+      // e.g. https://res.cloudinary.com/ddjld75el/video/upload/v123/videos/abc.mp4
+      // → videos/abc  (no extension)
+      try {
+        const parts = url.split("/upload/");
+        if (parts.length < 2) return null;
+        let path = parts[1];
+        // remove version segment (v1234567/)
+        path = path.replace(/^v\d+\//, "");
+        // remove extension
+        path = path.replace(/\.[^/.]+$/, "");
+        return path;
+      } catch (_) { return null; }
+    }
+
+    // ── Play Episode ──────────────────────────────────────
+    function playEp(epId) {
+      const ep = anime.episodes.find(e => e.id === epId);
+      if (!ep) return;
+
+      document.getElementById("playerWrap").style.display = "block";
+      document.getElementById("noEpMsg").style.display    = "none";
+
+      // Init player once
+      initCloudinaryPlayer();
+
+      const publicId = getPublicIdFromUrl(ep.videoUrl);
+
+      if (publicId) {
+        // ✅ Cloudinary-hosted video → use player natively
+        cldPlayer.source(publicId, {
+          info: {
+            title   : `EP ${ep.number}: ${ep.name}`,
+            subtitle: ep.description || "",
+            poster  : ep.thumbnail || "assets/ep1-poster.png"
+          },
+          // Poster per episode
+          poster: ep.thumbnail || "assets/ep1-poster.png",
+          transformation: [{ quality: "auto", fetchFormat: "auto" }]
+        });
+      } else {
+        // ✅ Fallback: direct URL (non-Cloudinary or raw link)
+        cldPlayer.source({ url: ep.videoUrl });
+      }
+
+      // Update Now Playing bar
+      document.getElementById("nowPlayingTitle").textContent = `EP ${ep.number}: ${ep.name}`;
+      document.getElementById("nowPlayingDesc").textContent  = ep.description || "";
+
+      // Highlight active episode
+      renderEpisodes(epId);
+
+      // Save to history
+      if (session) DB.addToHistory(session.userId, animeId, epId);
+
+      // Scroll player into view on mobile
+      document.getElementById("playerWrap").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // ── Render Episode Cards ──────────────────────────────
+    function renderEpisodes(activeId) {
+      document.getElementById("episodeList").innerHTML = anime.episodes.map(ep => `
+        <div class="ep-card ${activeId === ep.id ? "active" : ""}" onclick="playEp('${ep.id}')">
+          ${ep.thumbnail
+            ? `<img class="ep-thumb" src="${ep.thumbnail}" alt="EP${ep.number}"
+                 onerror="this.style.background='var(--bg-surface)'">`
+            : `<div class="ep-thumb" style="background:var(--bg-surface);display:flex;align-items:center;justify-content:center;font-size:1.5rem;">🎬</div>`}
+          <div class="ep-info">
+            <div class="ep-num">EP ${ep.number}</div>
+            <div class="ep-name">${ep.name}</div>
+          </div>
+        </div>`).join("");
+    }
+
+    // ── Render Anime Detail ───────────────────────────────
+    function renderDetail() {
+      document.title = anime.name + " — Team Anime Lover";
+      document.getElementById("detailBg").style.backgroundImage = `url('${anime.banner}')`;
+      document.getElementById("detailPoster").src               = anime.banner;
+      document.getElementById("detailTitle").textContent        = anime.name;
+      document.getElementById("detailDesc").textContent         = anime.description || "";
+
+      document.getElementById("detailBadges").innerHTML = `
+        <span class="badge ${anime.type==="Anime"?"badge-anime":"badge-live"}">${anime.type==="Anime"?"🎌":"🎬"} ${anime.type}</span>
+        <span class="anime-card-status status-${anime.status==="Completed"?"completed":anime.status==="On-Going"?"ongoing":"dubbing"}">${anime.status}</span>
+        <span style="color:var(--text-muted);font-size:0.8rem;">${(anime.episodes||[]).length}/${anime.totalEpisodes} Episodes</span>`;
+
+      document.getElementById("detailActions").innerHTML = `
+        ${(anime.episodes||[]).length > 0
+          ? `<button class="btn btn-primary" onclick="playEp('${anime.episodes[0].id}')">▶ Play EP 1</button>` : ""}
+        <button class="btn btn-secondary" id="listBtn" onclick="toggleList()">+ My List</button>`;
+
+      DB.getUserById(session.userId).then(user => {
+        if (user?.myList?.includes(animeId))
+          document.getElementById("listBtn").textContent = "✓ In My List";
+      });
+
+      if ((anime.episodes||[]).length === 0) {
+        document.getElementById("noEpMsg").style.display    = "block";
+        document.getElementById("playerWrap").style.display = "none";
+        document.getElementById("episodeList").innerHTML    =
+          `<p style="color:var(--text-muted);text-align:center;padding:24px;">No episodes yet.</p>`;
+      } else {
+        document.getElementById("noEpMsg").style.display    = "none";
+        document.getElementById("playerWrap").style.display = "block";
+        renderEpisodes();
+        // Auto-play first episode
+        playEp(anime.episodes[0].id);
+      }
+    }
+
+    // ── Toggle My List ────────────────────────────────────
+    async function toggleList() {
+      const user = await DB.getUserById(session.userId);
+      const btn  = document.getElementById("listBtn");
+      if (user?.myList?.includes(animeId)) {
+        await DB.removeFromMyList(session.userId, animeId);
+        btn.textContent = "+ My List"; toast("Removed from My List", "info");
+      } else {
+        await DB.addToMyList(session.userId, animeId);
+        btn.textContent = "✓ In My List"; toast("Added to My List!", "success");
+      }
+    }
+
+    // ── Bootstrap ─────────────────────────────────────────
+    window.addEventListener("db-ready", async () => {
+      if (!DB.getSession())          { window.location.href = "login.html";  return; }
+      if (DB.getSession().isAdmin)   { window.location.href = "admin.html";  return; }
+      if (!animeId)                  { window.location.href = "index.html";  return; }
+
+      session = DB.getSession();
+      await buildNavbar(document.getElementById("navbarContainer"));
+      anime = await DB.getAnimeById(animeId);
+      if (!anime) { window.location.href = "index.html"; return; }
+      renderDetail();
+    });
+  </script>
+</body>
+</html>

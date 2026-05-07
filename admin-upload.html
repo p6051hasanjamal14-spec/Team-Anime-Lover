@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload — Team Anime Lover</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .upload-wrap { max-width:720px; margin:0 auto; padding:40px 24px 80px; }
+    .upload-title { font-family:var(--font-heading); font-size:2.5rem; letter-spacing:2px; margin-bottom:32px; }
+    .form-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:32px; }
+    .type-selector { display:flex; gap:12px; margin-bottom:8px; }
+    .type-opt { flex:1; padding:16px; border-radius:12px; border:2px solid var(--border); text-align:center; cursor:pointer; transition:all 0.2s; font-family:var(--font-ui); font-weight:700; font-size:1rem; color:var(--text-muted); background:none; }
+    .type-opt.active { border-color:var(--accent); color:var(--accent); background:rgba(232,180,90,0.08); }
+    .type-opt span { display:block; font-size:2rem; margin-bottom:6px; }
+    .progress-wrap { margin-top:8px; display:none; }
+    .progress-bar-bg   { background:rgba(255,255,255,0.08); border-radius:8px; overflow:hidden; height:10px; }
+    .progress-bar-fill { background:var(--accent); height:100%; width:0%; transition:width 0.3s; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <div class="page-wrap">
+    <div class="upload-wrap">
+      <h1 class="upload-title" id="pageTitle">+ <span style="color:var(--accent)">Upload</span> Content</h1>
+      <div class="form-card">
+        <div class="form-group">
+          <label class="form-label">Content Type</label>
+          <div class="type-selector">
+            <button class="type-opt active" onclick="setType('Anime')"><span>🎌</span>Anime</button>
+            <button class="type-opt"        onclick="setType('Live Action')"><span>🎬</span>Live Action</button>
+          </div>
+        </div>
+        <input type="hidden" id="contentType" value="Anime">
+
+        <div class="form-group">
+          <label class="form-label">Name *</label>
+          <input type="text" class="form-input" id="animeName" placeholder="e.g. Naruto Shippuden">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description *</label>
+          <textarea class="form-textarea" id="animeDesc" rows="4" placeholder="Brief description..."></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="form-group">
+            <label class="form-label">Total Episodes *</label>
+            <input type="number" class="form-input" id="totalEps" min="1" placeholder="e.g. 24">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status *</label>
+            <select class="form-select" id="animeStatus">
+              <option value="On-Going">On-Going</option>
+              <option value="Completed">Completed</option>
+              <option value="Dubbing In Progress">Dubbing In Progress</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Banner / Poster Image *</label>
+          <div class="file-drop" id="bannerDrop" onclick="document.getElementById('bannerFile').click()">
+            <div class="drop-icon">🖼️</div>
+            <p id="bannerLabel">Click to upload banner image</p>
+            <p style="font-size:0.8rem;margin-top:4px;color:var(--text-muted);">JPG, PNG, WEBP recommended</p>
+            <input type="file" id="bannerFile" accept="image/*" onchange="selectBanner(this)">
+          </div>
+          <img id="bannerPreview" class="preview-img" alt="Preview">
+          <div class="progress-wrap" id="bannerProgress">
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="bannerBar"></div></div>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;" id="bannerPct"></p>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
+          <button class="btn btn-primary" onclick="saveAnime()" id="saveBtn">💾 Save & Publish</button>
+          <a href="admin.html" class="btn btn-secondary">Cancel</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/db.js"></script>
+  <script src="js/cloudinary.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    let bannerFile = null, bannerUrl = "", editId = null;
+
+    window.addEventListener("db-ready", async () => {
+      if (!DB.getSession()) { window.location.href = "login.html"; return; }
+      if (!DB.getSession().isAdmin) { window.location.href = "index.html"; return; }
+      await buildNavbar(document.getElementById("navbarContainer"));
+      const params = new URLSearchParams(window.location.search);
+      editId = params.get("edit") || null;
+      if (editId) {
+        const anime = await DB.getAnimeById(editId);
+        if (anime) {
+          document.getElementById("pageTitle").innerHTML = '✏️ <span style="color:var(--accent)">Edit</span> Content';
+          document.getElementById("saveBtn").textContent  = "💾 Save Changes";
+          document.getElementById("animeName").value      = anime.name;
+          document.getElementById("animeDesc").value      = anime.description;
+          document.getElementById("totalEps").value       = anime.totalEpisodes;
+          document.getElementById("animeStatus").value    = anime.status;
+          document.getElementById("contentType").value    = anime.type;
+          setType(anime.type);
+          bannerUrl = anime.banner;
+          const prev = document.getElementById("bannerPreview");
+          prev.src = anime.banner; prev.style.display = "block";
+          document.getElementById("bannerLabel").textContent = "✅ Banner already uploaded";
+        }
+      }
+    });
+
+    function setType(type) {
+      document.getElementById("contentType").value = type;
+      document.querySelectorAll(".type-opt").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".type-opt")[type === "Anime" ? 0 : 1].classList.add("active");
+    }
+
+    function selectBanner(input) {
+      if (!input.files[0]) return;
+      bannerFile = input.files[0]; bannerUrl = "";
+      document.getElementById("bannerLabel").textContent = "✅ " + bannerFile.name;
+      const prev = document.getElementById("bannerPreview");
+      prev.src = URL.createObjectURL(bannerFile); prev.style.display = "block";
+    }
+
+    // Drag & drop
+    const drop = document.getElementById("bannerDrop");
+    drop.addEventListener("dragover",  e => { e.preventDefault(); drop.classList.add("drag-over"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("drag-over"));
+    drop.addEventListener("drop", e => {
+      e.preventDefault(); drop.classList.remove("drag-over");
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith("image/")) {
+        bannerFile = file; bannerUrl = "";
+        document.getElementById("bannerLabel").textContent = "✅ " + file.name;
+        const prev = document.getElementById("bannerPreview");
+        prev.src = URL.createObjectURL(file); prev.style.display = "block";
+      }
+    });
+
+    async function saveAnime() {
+      const name   = document.getElementById("animeName").value.trim();
+      const desc   = document.getElementById("animeDesc").value.trim();
+      const total  = parseInt(document.getElementById("totalEps").value);
+      const status = document.getElementById("animeStatus").value;
+      const type   = document.getElementById("contentType").value;
+
+      if (!name)  { toast("Please enter a name.", "error"); return; }
+      if (!desc)  { toast("Please enter a description.", "error"); return; }
+      if (!total || total < 1) { toast("Enter valid total episodes.", "error"); return; }
+      if (!bannerFile && !bannerUrl) { toast("Please upload a banner image.", "error"); return; }
+
+      const btn = document.getElementById("saveBtn");
+      btn.disabled = true; btn.textContent = "Publishing...";
+
+      try {
+        if (bannerFile) {
+          document.getElementById("bannerProgress").style.display = "block";
+          bannerUrl = await DB.uploadFile(bannerFile, pct => {
+            document.getElementById("bannerBar").style.width = pct + "%";
+            document.getElementById("bannerPct").textContent = `Uploading banner... ${pct}%`;
+          });
+          document.getElementById("bannerPct").textContent = "✅ Banner uploaded!";
+        }
+
+        if (editId) {
+          await DB.updateAnime(editId, { name, description: desc, totalEpisodes: total, status, type, banner: bannerUrl });
+          toast("Anime updated!", "success");
+        } else {
+          await DB.addAnime({ name, description: desc, totalEpisodes: total, status, type, banner: bannerUrl });
+          toast("Anime published!", "success");
+        }
+        setTimeout(() => window.location.href = "admin.html", 900);
+      } catch (e) {
+        toast("Error: " + e.message, "error");
+        btn.disabled = false; btn.textContent = "💾 Save & Publish";
+      }
+    }
+  </script>
+</body>
+</html>

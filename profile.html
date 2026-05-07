@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile — Team Anime Lover</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .profile-bg { height:280px; background:linear-gradient(135deg,#1a0533,#0a0a1f,#1a1500); background-size:cover; background-position:center; position:relative; cursor:pointer; }
+    .profile-bg-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.2s; }
+    .profile-bg:hover .profile-bg-overlay { opacity:1; }
+    .profile-avatar-wrap { position:absolute; bottom:-50px; left:48px; width:100px; height:100px; border-radius:50%; overflow:hidden; border:4px solid var(--accent); cursor:pointer; }
+    .avatar-hover { position:absolute; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.2s; border-radius:50%; }
+    .profile-avatar-wrap:hover .avatar-hover { opacity:1; }
+    .profile-info  { margin-top:64px; padding:0 48px 40px; }
+    .edit-card     { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:28px; max-width:640px; }
+    @media(max-width:900px){ .profile-info,.edit-card-wrap { padding-left:16px; padding-right:16px; } .profile-avatar-wrap { left:16px; } }
+  </style>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <div class="page-wrap">
+    <div class="profile-bg" id="profileBg" onclick="document.getElementById('bgInput').click()">
+      <div class="profile-bg-overlay">
+        <span style="font-size:1.4rem;background:rgba(0,0,0,0.6);padding:10px 20px;border-radius:10px;">📷 Change Cover</span>
+      </div>
+      <input type="file" id="bgInput" accept="image/*" style="display:none" onchange="uploadBg(this)">
+      <div class="profile-avatar-wrap" onclick="event.stopPropagation();document.getElementById('avatarInput').click()">
+        <img id="profileAvatar" src="assets/default-avatar.svg" alt="Avatar" style="width:100%;height:100%;object-fit:cover;">
+        <div class="avatar-hover">📷</div>
+        <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="uploadAvatar(this)">
+      </div>
+    </div>
+
+    <div class="profile-info">
+      <h2 style="font-family:var(--font-heading);font-size:2rem;" id="profileName">Loading...</h2>
+      <p style="color:var(--text-muted);font-size:0.9rem;margin-top:4px;" id="profileMeta"></p>
+    </div>
+
+    <div style="padding:0 48px 60px;" class="edit-card-wrap">
+      <div class="edit-card">
+        <h3 style="font-family:var(--font-heading);font-size:1.5rem;margin-bottom:24px;">✏️ Edit Profile</h3>
+        <div class="form-group">
+          <label class="form-label">Display Name</label>
+          <input type="text" class="form-input" id="editName">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Gender</label>
+          <select class="form-select" id="editGender">
+            <option value="">Prefer not to say</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date of Birth</label>
+          <input type="date" class="form-input" id="editDob">
+        </div>
+        <button class="btn btn-primary" onclick="saveProfile()" id="saveBtn">💾 Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/db.js"></script>
+  <script src="js/cloudinary.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    let session, user, isAdmin;
+
+    window.addEventListener("db-ready", async () => {
+      if (!DB.getSession()) { window.location.href = "login.html"; return; }
+      session = DB.getSession(); isAdmin = session.isAdmin;
+      await buildNavbar(document.getElementById("navbarContainer"));
+      if (!isAdmin) { user = await DB.getUserById(session.userId); loadProfile(); }
+      else {
+        document.getElementById("profileName").textContent = "Admin";
+        document.getElementById("profileMeta").textContent = "Administrator • Team Anime Lover";
+        document.getElementById("profileAvatar").src = "assets/logo.jpeg";
+      }
+    });
+
+    function loadProfile() {
+      document.getElementById("profileAvatar").src = user.profilePic || "assets/default-avatar.svg";
+      if (user.bgImage) document.getElementById("profileBg").style.backgroundImage = `url('${user.bgImage}')`;
+      document.getElementById("profileName").textContent = user.name;
+      document.getElementById("profileMeta").textContent =
+        [user.gender, user.dob ? "DOB: " + user.dob : ""].filter(Boolean).join(" • ") || user.email;
+      document.getElementById("editName").value   = user.name   || "";
+      document.getElementById("editGender").value = user.gender || "";
+      document.getElementById("editDob").value    = user.dob    || "";
+    }
+
+    async function uploadAvatar(input) {
+      if (!input.files[0] || isAdmin) return;
+      const btn = document.getElementById("saveBtn");
+      btn.textContent = "Uploading..."; btn.disabled = true;
+      try {
+        const url = await DB.uploadFile(input.files[0], pct => {});
+        await DB.updateUser(session.userId, { profilePic: url });
+        document.getElementById("profileAvatar").src = url;
+        await buildNavbar(document.getElementById("navbarContainer"));
+        toast("Profile picture updated!", "success");
+      } catch (e) { toast("Upload failed: " + e.message, "error"); }
+      finally { btn.textContent = "💾 Save Changes"; btn.disabled = false; }
+    }
+
+    async function uploadBg(input) {
+      if (!input.files[0] || isAdmin) return;
+      try {
+        const url = await DB.uploadFile(input.files[0], pct => {});
+        await DB.updateUser(session.userId, { bgImage: url });
+        document.getElementById("profileBg").style.backgroundImage = `url('${url}')`;
+        toast("Cover image updated!", "success");
+      } catch (e) { toast("Upload failed: " + e.message, "error"); }
+    }
+
+    async function saveProfile() {
+      if (isAdmin) { toast("Admin profile cannot be edited here.", "info"); return; }
+      const name   = document.getElementById("editName").value.trim();
+      const gender = document.getElementById("editGender").value;
+      const dob    = document.getElementById("editDob").value;
+      if (!name) { toast("Name cannot be empty.", "error"); return; }
+      const btn = document.getElementById("saveBtn");
+      btn.textContent = "Saving..."; btn.disabled = true;
+      await DB.updateUser(session.userId, { name, gender, dob });
+      user = await DB.getUserById(session.userId);
+      loadProfile();
+      await buildNavbar(document.getElementById("navbarContainer"));
+      toast("Profile saved!", "success");
+      btn.textContent = "💾 Save Changes"; btn.disabled = false;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My List — Team Anime Lover</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .ml-header { padding:40px 48px 0; }
+    .ml-title  { font-family:var(--font-heading); font-size:2.5rem; letter-spacing:2px; }
+    .ml-body   { padding:32px 48px 60px; }
+    @media(max-width:900px){ .ml-header,.ml-body { padding-left:16px; padding-right:16px; } }
+  </style>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <div class="page-wrap">
+    <div class="ml-header">
+      <h1 class="ml-title">My <span style="color:var(--accent)">List</span></h1>
+    </div>
+    <div class="ml-body">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('watchlist',this)">📋 Watch List</button>
+        <button class="tab-btn"        onclick="switchTab('history',this)">🕐 History</button>
+      </div>
+      <div class="tab-panel active" id="watchlistPanel">
+        <div class="anime-grid" id="watchlistGrid">
+          <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px;color:var(--text-muted);padding:40px;">
+            <div class="spinner"></div> Loading...
+          </div>
+        </div>
+      </div>
+      <div class="tab-panel" id="historyPanel">
+        <div class="anime-grid" id="historyGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/db.js"></script>
+  <script src="js/cloudinary.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    let session, user, allAnimes;
+
+    window.addEventListener("db-ready", async () => {
+      if (!DB.getSession()) { window.location.href = "login.html"; return; }
+      if (DB.getSession().isAdmin) { window.location.href = "admin.html"; return; }
+      session = DB.getSession();
+      await buildNavbar(document.getElementById("navbarContainer"));
+      [user, allAnimes] = await Promise.all([DB.getUserById(session.userId), DB.getAllAnimes()]);
+      renderAll();
+    });
+
+    function switchTab(tab, btn) {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById(tab + "Panel").classList.add("active");
+    }
+
+    function animeCard(a, showRemove) {
+      const eps = a.episodes || [];
+      return `
+        <div class="anime-card" onclick="window.location.href='anime.html?id=${a.id}'">
+          <img class="anime-card-img" src="${a.banner}" alt="${a.name}" onerror="this.style.background='var(--bg-surface)'">
+          <span class="card-type-badge">${a.type==="Anime"?"🎌":"🎬"} ${a.type}</span>
+          <div class="anime-card-body">
+            <div class="anime-card-title">${a.name}</div>
+            <div class="anime-card-meta">
+              <span class="anime-card-status status-${a.status==="Completed"?"completed":a.status==="On-Going"?"ongoing":"dubbing"}">${a.status}</span>
+              <span class="anime-card-eps">${eps.length}/${a.totalEpisodes} ep</span>
+            </div>
+          </div>
+          <div class="anime-card-overlay">
+            <button class="btn btn-primary btn-sm">▶ Watch</button>
+            ${showRemove
+              ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();removeList('${a.id}')">✕ Remove</button>`
+              : ""}
+          </div>
+        </div>`;
+    }
+
+    function renderAll() {
+      const myList = (user.myList || []).map(id => allAnimes.find(a => a.id === id)).filter(Boolean);
+      document.getElementById("watchlistGrid").innerHTML = myList.length === 0
+        ? `<div class="empty-state" style="grid-column:1/-1">
+             <div class="empty-icon">📋</div><h3>Nothing Here Yet</h3>
+             <p>Browse anime and add them to your list!</p>
+             <a href="browse.html" class="btn btn-primary" style="margin-top:16px;display:inline-flex;">Browse Now</a>
+           </div>`
+        : myList.map(a => animeCard(a, true)).join("");
+
+      const seen = new Set(); const histAnimes = [];
+      for (const h of (user.history || [])) {
+        if (!seen.has(h.animeId)) {
+          seen.add(h.animeId);
+          const a = allAnimes.find(x => x.id === h.animeId);
+          if (a) histAnimes.push(a);
+        }
+      }
+      document.getElementById("historyGrid").innerHTML = histAnimes.length === 0
+        ? `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🕐</div><h3>No History</h3><p>Start watching to see history!</p></div>`
+        : histAnimes.map(a => animeCard(a, false)).join("");
+    }
+
+    async function removeList(animeId) {
+      await DB.removeFromMyList(session.userId, animeId);
+      user = await DB.getUserById(session.userId);
+      toast("Removed from My List", "info");
+      renderAll();
+    }
+  </script>
+</body>
+</html>

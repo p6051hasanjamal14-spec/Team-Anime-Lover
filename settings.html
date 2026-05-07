@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — Team Anime Lover</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .settings-wrap { max-width:640px; margin:0 auto; padding:40px 24px 80px; }
+    .settings-page-title { font-family:var(--font-heading); font-size:2.5rem; letter-spacing:2px; margin-bottom:32px; }
+    .setting-row { display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid var(--border); }
+    .rating-options { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .rating-pill { padding:7px 14px; border-radius:24px; font-family:var(--font-ui); font-weight:600; font-size:0.8rem; cursor:pointer; border:1.5px solid var(--border); color:var(--text-muted); background:none; transition:all 0.2s; }
+    .rating-pill.active { border-color:var(--accent); color:var(--accent); background:rgba(232,180,90,0.1); }
+  </style>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <div class="page-wrap">
+    <div class="settings-wrap">
+      <h1 class="settings-page-title">⚙️ <span style="color:var(--accent)">Settings</span></h1>
+
+      <div class="settings-card">
+        <h3>🌐 Display Language</h3>
+        <div class="form-group" style="margin:10px 0 0;">
+          <select class="form-select" id="langSelect" onchange="saveLang(this.value)">
+            <option value="English">English</option>
+            <option value="Hindi">Hindi</option>
+            <option value="Japanese">Japanese</option>
+            <option value="Korean">Korean</option>
+            <option value="Spanish">Spanish</option>
+            <option value="French">French</option>
+            <option value="Arabic">Arabic</option>
+            <option value="Portuguese">Portuguese</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>🔞 Content Restriction</h3>
+        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:12px;">Choose the maximum maturity level of content you want to see.</p>
+        <div class="rating-options" id="ratingOptions">
+          <button class="rating-pill" data-r="U"                  onclick="saveRating('U',this)">U — All Ages</button>
+          <button class="rating-pill" data-r="U/A 7+"             onclick="saveRating('U/A 7+',this)">U/A 7+ — Ages 7+</button>
+          <button class="rating-pill" data-r="A/A 13+"            onclick="saveRating('A/A 13+',this)">A/A 13+ — Ages 13+</button>
+          <button class="rating-pill" data-r="U/A 16+"            onclick="saveRating('U/A 16+',this)">U/A 16+ — Ages 16+</button>
+          <button class="rating-pill" data-r="A"                  onclick="saveRating('A',this)">A — Adults Only</button>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>👤 Account</h3>
+        <div class="setting-row">
+          <div>
+            <div style="font-weight:600;">Edit Profile</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);">Change name, avatar, date of birth</div>
+          </div>
+          <a href="profile.html" class="btn btn-secondary btn-sm">Edit</a>
+        </div>
+        <div class="setting-row" style="border:none;">
+          <div>
+            <div style="font-weight:600;">Sign Out</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);">Log out of your account</div>
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="Auth.logout()">Logout</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/db.js"></script>
+  <script src="js/cloudinary.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    let session, user;
+
+    window.addEventListener("db-ready", async () => {
+      if (!DB.getSession()) { window.location.href = "login.html"; return; }
+      if (DB.getSession().isAdmin) { window.location.href = "admin.html"; return; }
+      session = DB.getSession();
+      await buildNavbar(document.getElementById("navbarContainer"));
+      user = await DB.getUserById(session.userId);
+      document.getElementById("langSelect").value = user.language || "English";
+      const activeR = user.contentRestriction || "U/A 16+";
+      document.querySelectorAll(".rating-pill").forEach(b => {
+        if (b.dataset.r === activeR) b.classList.add("active");
+      });
+    });
+
+    async function saveLang(val) {
+      await DB.updateUser(session.userId, { language: val });
+      toast("Language updated!", "success");
+    }
+
+    async function saveRating(val, btn) {
+      document.querySelectorAll(".rating-pill").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      await DB.updateUser(session.userId, { contentRestriction: val });
+      toast("Content restriction updated!", "success");
+    }
+  </script>
+</body>
+</html>

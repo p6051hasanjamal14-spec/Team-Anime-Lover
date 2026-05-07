@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Episodes — Team Anime Lover</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .ep-wrap { max-width:900px; margin:0 auto; padding:40px 24px 80px; }
+    .add-ep-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:28px; margin-bottom:32px; }
+    .ep-admin-item { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; display:flex; align-items:center; gap:16px; margin-bottom:12px; }
+    .ep-admin-thumb { width:90px; height:54px; object-fit:cover; border-radius:8px; background:var(--bg-surface); flex-shrink:0; }
+    .progress-wrap    { margin-top:8px; display:none; }
+    .progress-bar-bg  { background:rgba(255,255,255,0.08); border-radius:8px; overflow:hidden; height:10px; }
+    .progress-bar-fill { background:var(--accent); height:100%; width:0%; transition:width 0.3s; border-radius:8px; }
+    .confirm-wrap { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:3000; display:flex; align-items:center; justify-content:center; }
+    .confirm-box  { background:var(--bg-surface); border:1px solid var(--border); border-radius:16px; padding:32px; max-width:380px; width:90%; text-align:center; }
+  </style>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <div class="page-wrap">
+    <div class="ep-wrap">
+      <div style="margin-bottom:16px;">
+        <a href="admin.html" class="btn btn-secondary btn-sm">← Back to Dashboard</a>
+      </div>
+      <h1 style="font-family:var(--font-heading);font-size:2rem;letter-spacing:2px;margin-bottom:4px;">📺 Episodes for</h1>
+      <h2 style="font-family:var(--font-heading);font-size:1.6rem;color:var(--accent);margin-bottom:4px;" id="animeName">Loading...</h2>
+      <p style="color:var(--text-muted);margin-bottom:32px;" id="animeMeta"></p>
+
+      <!-- Add Episode -->
+      <div class="add-ep-card">
+        <h3 style="font-family:var(--font-heading);font-size:1.4rem;margin-bottom:20px;">➕ Add New Episode</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="form-group">
+            <label class="form-label">Episode Name *</label>
+            <input type="text" class="form-input" id="epName" placeholder="e.g. The Beginning">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Episode Description</label>
+            <input type="text" class="form-input" id="epDesc" placeholder="Brief summary...">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <!-- Thumbnail -->
+          <div class="form-group">
+            <label class="form-label">Thumbnail Image</label>
+            <div class="file-drop" style="padding:16px;" onclick="document.getElementById('thumbFile').click()">
+              <div class="drop-icon" style="font-size:1.5rem;">🖼️</div>
+              <p id="thumbLabel" style="font-size:0.85rem;">Click to upload thumbnail</p>
+              <input type="file" id="thumbFile" accept="image/*" onchange="selectThumb(this)">
+            </div>
+            <div class="progress-wrap" id="thumbProgressWrap">
+              <div class="progress-bar-bg"><div class="progress-bar-fill" id="thumbBar"></div></div>
+              <p id="thumbPct" style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;"></p>
+            </div>
+          </div>
+          <!-- Video -->
+          <div class="form-group">
+            <label class="form-label">Episode Video *</label>
+            <div class="file-drop" style="padding:16px;" onclick="document.getElementById('videoFile').click()">
+              <div class="drop-icon" style="font-size:1.5rem;">🎬</div>
+              <p id="videoLabel" style="font-size:0.85rem;">Click to upload video (MP4 recommended)</p>
+              <input type="file" id="videoFile" accept="video/*" onchange="selectVideo(this)">
+            </div>
+            <div class="progress-wrap" id="videoProgressWrap">
+              <div class="progress-bar-bg"><div class="progress-bar-fill" id="videoBar"></div></div>
+              <p id="videoPct" style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;"></p>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addEpisode()" id="addEpBtn">🚀 Upload & Add Episode</button>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-top:10px;" id="uploadStatus"></p>
+      </div>
+
+      <!-- Episodes List -->
+      <h3 style="font-family:var(--font-heading);font-size:1.4rem;margin-bottom:16px;">
+        All Episodes <span id="epCount" style="color:var(--accent);"></span>
+      </h3>
+      <div id="epAdminList">
+        <div style="display:flex;align-items:center;gap:12px;color:var(--text-muted);padding:32px;">
+          <div class="spinner"></div> Loading episodes...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete -->
+  <div class="confirm-wrap" id="confirmWrap" style="display:none;">
+    <div class="confirm-box">
+      <h3 style="font-family:var(--font-heading);font-size:1.5rem;margin-bottom:12px;">Delete Episode?</h3>
+      <p style="color:var(--text-muted);margin-bottom:24px;">This will permanently delete this episode.</p>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <button class="btn btn-secondary" onclick="document.getElementById('confirmWrap').style.display='none'">Cancel</button>
+        <button class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/db.js"></script>
+  <script src="js/cloudinary.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    const params  = new URLSearchParams(window.location.search);
+    const animeId = params.get("id");
+    let anime = null, thumbFile = null, videoFile = null;
+
+    window.addEventListener("db-ready", async () => {
+      if (!DB.getSession()) { window.location.href = "login.html"; return; }
+      if (!DB.getSession().isAdmin) { window.location.href = "index.html"; return; }
+      if (!animeId) { window.location.href = "admin.html"; return; }
+      await buildNavbar(document.getElementById("navbarContainer"));
+      await loadAnime();
+    });
+
+    async function loadAnime() {
+      anime = await DB.getAnimeById(animeId);
+      if (!anime) { window.location.href = "admin.html"; return; }
+      document.getElementById("animeName").textContent = anime.name;
+      document.getElementById("animeMeta").textContent =
+        `${anime.type} • ${anime.status} • ${(anime.episodes||[]).length}/${anime.totalEpisodes} episodes uploaded`;
+      document.getElementById("epCount").textContent = `(${(anime.episodes||[]).length})`;
+      renderEpisodes();
+    }
+
+    function renderEpisodes() {
+      const list = document.getElementById("epAdminList");
+      const eps  = [...(anime.episodes || [])].reverse();
+      if (eps.length === 0) {
+        list.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><h3>No Episodes Yet</h3><p>Upload your first episode above!</p></div>`;
+        return;
+      }
+      list.innerHTML = eps.map(ep => `
+        <div class="ep-admin-item">
+          ${ep.thumbnail
+            ? `<img class="ep-admin-thumb" src="${ep.thumbnail}" alt="EP${ep.number}" onerror="this.src='';this.style.background='var(--bg-surface)'">`
+            : `<div class="ep-admin-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;">🎬</div>`}
+          <div style="flex:1;">
+            <div style="font-size:0.75rem;color:var(--accent);font-family:var(--font-ui);font-weight:700;">EPISODE ${ep.number}</div>
+            <div style="font-weight:700;margin-bottom:2px;">${ep.name}</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);">${ep.description || "No description."}</div>
+            ${ep.videoUrl ? `<a href="${ep.videoUrl}" target="_blank" style="font-size:0.75rem;color:var(--accent);margin-top:4px;display:inline-block;">🔗 View on Cloudinary</a>` : ""}
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="confirmDeleteEp('${ep.id}')">🗑️</button>
+        </div>`).join("");
+    }
+
+    function selectThumb(input) {
+      if (!input.files[0]) return;
+      thumbFile = input.files[0];
+      document.getElementById("thumbLabel").textContent = "✅ " + thumbFile.name;
+    }
+
+    function selectVideo(input) {
+      if (!input.files[0]) return;
+      videoFile = input.files[0];
+      document.getElementById("videoLabel").textContent = "✅ " + videoFile.name;
+    }
+
+    async function addEpisode() {
+      const name = document.getElementById("epName").value.trim();
+      const desc = document.getElementById("epDesc").value.trim();
+      if (!name)      { toast("Episode name is required.", "error"); return; }
+      if (!videoFile) { toast("Please select a video file.", "error"); return; }
+
+      const btn = document.getElementById("addEpBtn");
+      btn.disabled = true; btn.textContent = "Uploading...";
+      document.getElementById("uploadStatus").textContent = "⏳ Uploading to Cloudinary... please wait.";
+
+      try {
+        // Upload thumbnail
+        let thumbnailUrl = "";
+        if (thumbFile) {
+          document.getElementById("thumbProgressWrap").style.display = "block";
+          thumbnailUrl = await DB.uploadFile(thumbFile, pct => {
+            document.getElementById("thumbBar").style.width = pct + "%";
+            document.getElementById("thumbPct").textContent = `Thumbnail: ${pct}%`;
+          });
+          document.getElementById("thumbPct").textContent = "✅ Thumbnail uploaded!";
+        }
+
+        // Upload video
+        document.getElementById("videoProgressWrap").style.display = "block";
+        document.getElementById("uploadStatus").textContent = "⏳ Uploading video... Large files may take a few minutes.";
+        const videoUrl = await DB.uploadFile(videoFile, pct => {
+          document.getElementById("videoBar").style.width = pct + "%";
+          document.getElementById("videoPct").textContent = `Video: ${pct}%`;
+        });
+        document.getElementById("videoPct").textContent = "✅ Video uploaded!";
+        document.getElementById("uploadStatus").textContent = "💾 Saving episode data...";
+
+        await DB.addEpisode(animeId, { name, description: desc, thumbnail: thumbnailUrl, videoUrl });
+        toast("Episode added successfully! 🎉", "success");
+        document.getElementById("uploadStatus").textContent = "✅ Episode added!";
+
+        // Reset
+        document.getElementById("epName").value = "";
+        document.getElementById("epDesc").value = "";
+        document.getElementById("thumbLabel").textContent = "Click to upload thumbnail";
+        document.getElementById("videoLabel").textContent = "Click to upload video (MP4 recommended)";
+        document.getElementById("thumbProgressWrap").style.display = "none";
+        document.getElementById("videoProgressWrap").style.display = "none";
+        document.getElementById("thumbBar").style.width = "0%";
+        document.getElementById("videoBar").style.width = "0%";
+        document.getElementById("thumbFile").value = "";
+        document.getElementById("videoFile").value = "";
+        thumbFile = null; videoFile = null;
+
+        await loadAnime();
+      } catch (e) {
+        toast("Upload failed: " + e.message, "error");
+        document.getElementById("uploadStatus").textContent = "❌ Failed: " + e.message;
+      } finally {
+        btn.disabled = false; btn.textContent = "🚀 Upload & Add Episode";
+      }
+    }
+
+    function confirmDeleteEp(epId) {
+      document.getElementById("confirmWrap").style.display = "flex";
+      document.getElementById("confirmDeleteBtn").onclick = async () => {
+        document.getElementById("confirmDeleteBtn").textContent = "Deleting...";
+        await DB.deleteEpisode(animeId, epId);
+        document.getElementById("confirmWrap").style.display = "none";
+        document.getElementById("confirmDeleteBtn").textContent = "Delete";
+        toast("Episode deleted!", "success");
+        await loadAnime();
+      };
+    }
+  </script>
+</body>
+</html>
